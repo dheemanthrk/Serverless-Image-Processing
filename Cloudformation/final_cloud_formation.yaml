@@ -1,0 +1,142 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  S3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: frontendfiles1234
+      WebsiteConfiguration:
+        IndexDocument: index.html
+
+  Pipeline:
+    Type: 'AWS::CodePipeline::Pipeline'
+    Properties:
+      RoleArn: !GetAtt PipelineRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: frontendfiles1234
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId:
+                Category: Source
+                Owner: ThirdParty
+                Version: 1
+                Provider: GitHub
+              OutputArtifacts:
+                - Name: SourceOutput
+              Configuration:
+                Owner: dheemanthrk
+                Repo: frontends3
+                Branch: main
+                OAuthToken: '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'
+              RunOrder: 1
+        - Name: Build
+          Actions:
+            - Name: BuildAction
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              InputArtifacts:
+                - Name: SourceOutput
+              Configuration:
+                ProjectName: !Ref BuildProject
+              RunOrder: 1
+        - Name: Deploy
+          Actions:
+            - Name: DeployAction
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: S3
+              InputArtifacts:
+                - Name: SourceOutput
+              Configuration:
+                BucketName: !Ref S3Bucket
+                Extract: false
+                ObjectKey: index.html
+              RunOrder: 1
+  BuildProject:
+    Type: 'AWS::CodeBuild::Project'
+    Properties:
+      ServiceRole: !GetAtt BuildRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:4.0
+        Type: LINUX_CONTAINER
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          phases:
+            build:
+              commands:
+                - echo "Building"
+      TimeoutInMinutes: 60
+  PipelineRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: PipelinePolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - 's3:GetObject'
+                - 's3:PutObject'
+              Resource: !Sub "arn:aws:s3:::${S3Bucket}/*"
+            - Effect: Allow
+              Action: 's3:ListBucket'
+              Resource: !Sub "arn:aws:s3:::${S3Bucket}"
+            - Effect: Allow
+              Action: 'codebuild:StartBuild'
+              Resource: '*'  # You can specify the ARN of specific CodeBuild projects if needed
+            - Effect: Allow
+              Action: 'codebuild:BatchGetBuilds'
+              Resource: '*'  # You can specify the ARN of specific
+  BuildRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: BuildPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - 's3:GetObject'
+                - 's3:PutObject'
+                - 'codebuild:StartBuild'
+              Resource: '*'  # You can specify the ARN of specific S3 buckets if needed
+            - Effect: Allow
+              Action: 's3:ListBucket'
+              Resource: '*'  # You can specify the ARN of specific S3 buckets if needed
+            - Effect: Allow
+              Action: 
+                - 'logs:CreateLogGroup'
+                - 'logs:CreateLogStream'
+                - 'logs:PutLogEvents'
+              Resource: 'arn:aws:logs:*:*:*' # Adjust as needed for specific log groups
+            - Effect: Allow
+              Action: 'sqs:SendMessage'
+              Resource: '*'
