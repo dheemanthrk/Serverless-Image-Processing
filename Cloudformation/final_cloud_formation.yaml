@@ -29,7 +29,7 @@ Resources:
                 Owner: dheemanthrk
                 Repo: frontends3
                 Branch: main
-                OAuthToken: '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'
+                OAuthToken: ''
               RunOrder: 1
         - Name: Build
           Actions:
